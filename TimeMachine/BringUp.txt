@@ -206,9 +206,9 @@ void loop()
 		//Going to track 2 or 1?
 		if( tempButtonReg == 0 )
 		{
-			//track1
+			//track[0]
 			//seek the next note to play
-			nextEventToPlay = midiFile.track1.seekNextAfter(playHead.ticks);
+			nextEventToPlay = midiFile.track[0].seekNextAfter(playHead.ticks);
 			protoSynthFeed = 0;
 			mySerial.println("button 0");
 			buttonReg = 0;
@@ -262,7 +262,7 @@ void loop()
    //Seek here
   if(nextEventToPlay->timeStamp < playHead.ticks)
   {
-    if((nextEventToPlay != &midiFile.track1.nullObject)&&(nextEventToPlay != &midiFile.track2.nullObject))
+    if((nextEventToPlay != &midiFile.track[0].nullObject)&&(nextEventToPlay != &midiFile.track2.nullObject))
 	{
 	  switch(nextEventToPlay->eventType)
 	  {
@@ -287,7 +287,7 @@ void loop()
     playHead.zero();
 	if(protoSynthFeed == 0)
 	{
-	   nextEventToPlay = midiFile.track1.startObjectPtr;
+	   nextEventToPlay = midiFile.track[0].startObjectPtr;
 	}
 	else
 	{

@@ -51,8 +51,8 @@ class MidiFile {
       int       status                    (void);
 
       //Event list objects
-	  MicroLL track1;
-	  MicroLL track2;
+	  MicroLL track[16];
+	  uint8_t nextEmptyTrack;
 	  
 //*****These will probably need to be filled*****//
       //int       addEvent                  (int aTrack, int aTime, 

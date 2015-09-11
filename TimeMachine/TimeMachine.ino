@@ -11,35 +11,23 @@
 //
 //**********************************************************************//
 
-//**Panels and stuff**************************//
-
-#include "Panel.h"
-#include "PanelComponents.h"
-
-//Panel related variables
-Panel myPanel;
-
 //**Timers and stuff**************************//
 #include "timerModule32.h"
-
-//Globals
-IntervalTimer myTimer;
-
 #define MAXINTERVAL 2000000 //Max TimerClass interval
-
-//**Panel State Machine***********************//
-#include "panelStateMachine.h"
-PanelStateMachine panelSM;
-
-
+#include "timeKeeper.h"
+//**Panels and stuff**************************//
+#include <Wire.h>
+#include "Panel.h"
+//**Seven Segment Display*********************//
+#include "Wire.h"
+#include "s7sWrapper.h"
 //**Midi time keeping*************************//
 #include "TimeCode.h"
-BeatCode playHead;
-// tap LED stuff
-uint16_t BPM = 80;
-BeatCode tapHead;
-TimerClass32 tapTempoPulseTimer( 0 );
-uint32_t loopLength = 0xFFFFFFFF;
+//**Panel State Machine***********************//
+#include "panelStateMachine.h"
+
+//**Timers and stuff**************************//
+IntervalTimer myTimer;
 
 //HOW TO OPERATE
 //  Make TimerClass objects for each thing that needs periodic service
@@ -60,31 +48,46 @@ uint8_t ledToggleFastState = 0;
 TimerClass32 processSMTimer( 50000 );
 
 TimerClass32 debounceTimer(5000);
-#include "timeKeeper.h"
-
-
 
 //tick variable for interrupt driven timer1
 uint32_t usTicks = 0;
 uint8_t usTicksMutex = 1; //start locked out
 
+//**Panels and stuff**************************//
+Panel myPanel;
+
 //**Seven Segment Display*********************//
 // Here we'll define the I2C address of our S7S. By default it
 //  should be 0x71. This can be changed, though.
-#include "Wire.h"
-const byte s7sAddress = 0x71;
 char tempString[10];  // Will be used with sprintf to create strings
+S7sObject leftDisplay( 0x71 );
+S7sObject rightDisplay( 0x30 );
+
+//**Panel State Machine***********************//
+PanelStateMachine panelSM;
+
+//**Midi time keeping*************************//
+BeatCode playHead;
+// tap LED stuff
+uint16_t BPM = 80;
+BeatCode tapHead;
+TimerClass32 tapTempoPulseTimer( 0 );
+uint32_t loopLength = 0xFFFFFFFF;
 
 // MIDI things
 #include <MIDI.h>
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiA);
 
 #include "MicroLL.h"
-MicroLL track1( 1000 );
-MidiEvent * playBackNote;
+MicroLL track[16];
+MidiEvent * playBackNote[16];
+
+uint8_t rxLedState = 0;
+uint8_t txLedState = 0;
 
 void handleNoteOn(byte channel, byte pitch, byte velocity)
 {
+	rxLedState = 1;
 	if( panelSM.recording == 1 )
 	{
 		MidiEvent tempEvent;
@@ -93,13 +96,15 @@ void handleNoteOn(byte channel, byte pitch, byte velocity)
 		tempEvent.channel = 1;
 		tempEvent.value = pitch;
 		tempEvent.data = velocity;
-		track1.pushObject( tempEvent );
+		track[panelSM.recordingTrack].pushObject( tempEvent );
 	}
 	midiA.sendNoteOn(pitch, velocity, channel);
 }
 
 void handleNoteOff(byte channel, byte pitch, byte velocity)
 {
+	rxLedState = 1;
+
 	if( panelSM.recording == 1 )
 	{
 		MidiEvent tempEvent;
@@ -108,7 +113,7 @@ void handleNoteOff(byte channel, byte pitch, byte velocity)
 		tempEvent.channel = 1;
 		tempEvent.value = pitch;
 		tempEvent.data = 0;
-		track1.pushObject( tempEvent );
+		track[panelSM.recordingTrack].pushObject( tempEvent );
 	}
 	midiA.sendNoteOff(pitch, velocity, channel);
 	
@@ -118,52 +123,56 @@ void handleNoteOff(byte channel, byte pitch, byte velocity)
 // -----------------------------------------------------------------------------
 void setup() 
 {
-  //Initialize serial:
-  Serial.begin(9600);
-
-  //Init panel.h stuff
-  myPanel.init();
-  
-  // initialize IntervalTimer
-  myTimer.begin(serviceUS, 1);  // serviceMS to run every 0.001 seconds
-  
-  //Debug setting of random states and stuff
-  
-  //Set all LED off
-  myPanel.recordLed.setState(LEDOFF);
-  myPanel.playLed.setState(LEDOFF);
-  myPanel.overdubLed.setState(LEDOFF);
-  myPanel.tapLed.setState(LEDOFF);
-  myPanel.syncLed.setState(LEDOFF);
-
-  myPanel.update();
-  
-  //while(1);
-  
-  //debugTimeKeeper.mClear();
-  
-  Wire.begin();  // Initialize hardware I2C pins
-  // Clear the display, and then turn on all segments and decimals
-  clearDisplayI2C();  // Clears display, resets cursor
-  setBrightnessI2C(255);  // High brightness
-    // Magical sprintf creates a string for us to send to the s7s.
-  //  The %4d option creates a 4-digit integer.
-  sprintf(tempString, "%4d", (unsigned int)8888);
-  // This will output the tempString to the S7S
-  s7sSendStringI2C(tempString);
-
-  
-  //Update the BPM
-  tapTempoPulseTimer.setInterval( tapTempoTimerMath( BPM ) );
-
-  midiA.setHandleNoteOn(handleNoteOn);  // Put only the name of the function
-  midiA.setHandleNoteOff(handleNoteOff);
-  // Initiate MIDI communications, listen to all channels
-  midiA.begin(MIDI_CHANNEL_OMNI);
-  //midiA.turnThruOn();
-  midiA.turnThruOff();
-  
-  playBackNote = track1.startObjectPtr;
+	//Initialize serial:
+	Serial.begin(9600);
+	Serial.println("Program Started");
+	
+	//Init panel.h stuff
+	myPanel.init();
+	
+	// initialize IntervalTimer
+	myTimer.begin(serviceUS, 1);  // serviceMS to run every 0.001 seconds
+	
+	//Debug setting of random states and stuff
+	
+	//Set all LED off
+	myPanel.recordLed.setState(LEDOFF);
+	myPanel.playLed.setState(LEDOFF);
+	myPanel.overdubLed.setState(LEDOFF);
+	myPanel.tapLed.setState(LEDOFF);
+	myPanel.syncLed.setState(LEDOFF);
+	
+	myPanel.update();
+	
+	//while(1);
+	
+	//debugTimeKeeper.mClear();
+	
+	leftDisplay.clear();  // Clears display, resets cursor
+	leftDisplay.setBrightness(255);  // High brightness
+	//sprintf(tempString, "%4d", (unsigned int)8888);
+	leftDisplay.SendString("    ");
+	
+	rightDisplay.clear();  // Clears display, resets cursor
+	rightDisplay.setBrightness(255);  // High brightness
+	//sprintf(tempString, "%4d", (unsigned int)9999);
+	rightDisplay.SendString("    ");
+	
+	
+	//Update the BPM
+	tapTempoPulseTimer.setInterval( tapTempoTimerMath( BPM ) );
+	
+	midiA.setHandleNoteOn(handleNoteOn);  // Put only the name of the function
+	midiA.setHandleNoteOff(handleNoteOff);
+	// Initiate MIDI communications, listen to all channels
+	midiA.begin(MIDI_CHANNEL_OMNI);
+	//midiA.turnThruOn();
+	midiA.turnThruOff();
+	
+	for( int i = 0; i < 16; i++ )
+	{
+		playBackNote[i] = track[i].startObjectPtr;
+	}
 }
 
 void loop()
@@ -211,7 +220,14 @@ void loop()
 			loopLength = tapHead.getTotalPulses();
 			panelSM.markLength = 0;
 		}
-		
+		if( panelSM.clearAll == 1 )
+		{
+			for( int i = 0; i < 16; i++ )
+			{	
+				track[i].clear();
+			}
+			panelSM.clearAll = 0;
+		}
 		if( panelSM.screenControlTap == 1 )
 		{
 			char tempStringShort[4];
@@ -232,10 +248,33 @@ void loop()
 			sprintf(tempString, "%4d", (unsigned int)( BPM ));
 		}
 		// This will output the tempString to the S7S
-		s7sSendStringI2C(tempString);
+		leftDisplay.SendString(tempString);
+		sprintf(tempString, "%4d", (unsigned int)panelSM.trackNum);
+		rightDisplay.SendString(tempString);
 		
-		myPanel.update();
+		//Also service the rx/tx leds
+		if( rxLedState == 1)
+		{
+			rxLedState = 0;
+			myPanel.rxLed.setState( LEDOFF );
+		}
+		else
+		{
+			myPanel.rxLed.setState( LEDON );
+		}
+		if( txLedState == 1)
+		{
+			txLedState = 0;
+			myPanel.txLed.setState( LEDOFF );
+		}
+		else
+		{
+			myPanel.txLed.setState( LEDON );
+		}
+		
 		//Check for new data  ( does myPanel.memberName.newData == 1? )
+		myPanel.update();
+
 		uint8_t tempStatus = 0;
 		tempStatus |= myPanel.tapButton.newData;
 		tempStatus |= myPanel.syncButton.newData;
@@ -246,7 +285,6 @@ void loop()
 		tempStatus |= myPanel.playButton.newData;
 		tempStatus |= myPanel.stopButton.newData;
 		tempStatus |= myPanel.quantizeSelector.newData;
-		
 		
 		// If new, do something fabulous
 		
@@ -295,6 +333,7 @@ void loop()
 			}
 			//Update the BPM
 			tapTempoPulseTimer.setInterval( tapTempoTimerMath( BPM ) );
+			
 		}
 	}
 
@@ -318,67 +357,78 @@ void loop()
 			myPanel.tapLed.setState(LEDOFF);
 		}
 		tapHead.beatClockPulse();
+
+		
 		if( tapHead.getTotalPulses() > loopLength )
 		{
 			//Hardcoded, can't exceed 24 (1 beat) pulses
 			uint32_t residualPulses = tapHead.getTotalPulses() - loopLength;
 			tapHead.zero();
 			tapHead.pulses = residualPulses;
-			playBackNote = track1.startObjectPtr;
-			track1.printfMicroLL();
+			for( int i = 0; i < 16; i++ )
+			{
+				playBackNote[i] = track[i].startObjectPtr;
+				track[i].printfMicroLL();
+			}
 		}
 		
 		//Send midi data OUT
 		if( panelSM.playing == 1 )
 		{
-		    //track1.printfMicroLL();
-			//while(1);
-			//if we're looking at the null note, move on
-			if( playBackNote != &track1.nullObject )
+			for( int i = 0; i < 16; i++ )
 			{
-				//Serial.println("Real object");
-				//If the pulse count is greater than the next note, play it
-				if( tapHead.getTotalPulses() >= playBackNote->timeStamp )
+				//track[0].printfMicroLL();
+				//while(1);
+				//if we're looking at the null note, move on
+				if( playBackNote[i] != &track[i].nullObject )
 				{
-					Serial.println(playBackNote->timeStamp);
-					Serial.println(playBackNote->eventType);
-					Serial.println(playBackNote->data);
-					Serial.println(playBackNote->channel);
-					//while(1);
-					switch( playBackNote->eventType )
+					//Serial.println("Real object");
+					//If the pulse count is greater than the next note, play it
+					if( tapHead.getTotalPulses() >= playBackNote[i]->timeStamp )
 					{
-					case 0x90: //Note on
-						midiA.sendNoteOn( playBackNote->value, playBackNote->data, 1 );
-						Serial.println("Note On");
-						break;
-					case 0x80: //Note off
-						midiA.sendNoteOff( playBackNote->value, playBackNote->data, 1 );
-						Serial.println("Note Off");
-						break;
-					default:
-						break;
-					}
-					// move the note
-					if( playBackNote->nextObject != &track1.nullObject )
-					{
-						playBackNote = playBackNote->nextObject;
-					}
-
-				}
+						Serial.println(playBackNote[i]->timeStamp);
+						Serial.println(playBackNote[i]->eventType);
+						Serial.println(playBackNote[i]->data);
+						Serial.println(playBackNote[i]->channel);
+						//while(1);
+						txLedState = 1;
+						switch( playBackNote[i]->eventType )
+						{
+						case 0x90: //Note on
+							midiA.sendNoteOn( playBackNote[i]->value, playBackNote[i]->data, 1 );
+							Serial.println("Note On");
+							break;
+						case 0x80: //Note off
+							midiA.sendNoteOff( playBackNote[i]->value, playBackNote[i]->data, 1 );
+							Serial.println("Note Off");
+							break;
+						default:
+							break;
+						}
+						// move the note
+						if( playBackNote[i]->nextObject != &track[i].nullObject )
+						{
+							playBackNote[i] = playBackNote[i]->nextObject;
+						}
 				
+					}
+					
+				}
+				else
+				{
+					Serial.println("Null object");
+				}
+				// MidiEvent tempEvent;
+				// tempEvent.timeStamp = tapHead.getTotalPulses();
+				// tempEvent.eventType = NoteOn;
+				// tempEvent.channel = channel;
+				// tempEvent.value = pitch;
+				// tempEvent.data = velocity;
+				// track[0].pushObject( tempEvent );
 			}
-			else
-			{
-				Serial.println("Null object");
-			}
-			// MidiEvent tempEvent;
-			// tempEvent.timeStamp = tapHead.getTotalPulses();
-			// tempEvent.eventType = NoteOn;
-			// tempEvent.channel = channel;
-			// tempEvent.value = pitch;
-			// tempEvent.data = velocity;
-			// track1.pushObject( tempEvent );
+			
 		}
+		
 
 	}
 	
@@ -387,16 +437,18 @@ void loop()
 
 	}
 	
-	//**LED toggling of the panel class***********//  
+	//**Fast LED toggling of the panel class***********//  
 	if(ledToggleFastTimer.flagStatus() == PENDING)
 	{
-	ledToggleFastState = ledToggleFastState ^ 0x01;
-	
+		myPanel.toggleFastFlasherState();
+		
 	}
+
+	//**LED toggling of the panel class***********//  
 	if(ledToggleTimer.flagStatus() == PENDING)
 	{
-	ledToggleState = ledToggleState ^ 0x01;
-	
+		myPanel.toggleFlasherState();
+		
 	}
 	
 	midiA.read();
@@ -420,52 +472,6 @@ void serviceUS(void)
   usTicksMutex = 0;  //unlock
 }
 
-// This custom function works somewhat like a serial.print.
-//  You can send it an array of chars (string) and it'll print
-//  the first 4 characters in the array.
-void s7sSendStringI2C(String toSend)
-{
-  Wire.beginTransmission(s7sAddress);
-  for (int i=0; i<4; i++)
-  {
-    Wire.write(toSend[i]);
-  }
-  Wire.endTransmission();
-}
-
-// Send the clear display command (0x76)
-//  This will clear the display and reset the cursor
-void clearDisplayI2C()
-{
-  Wire.beginTransmission(s7sAddress);
-  Wire.write(0x76);  // Clear display command
-  Wire.endTransmission();
-}
-
-// Set the displays brightness. Should receive byte with the value
-//  to set the brightness to
-//  dimmest------------->brightest
-//     0--------127--------255
-void setBrightnessI2C(byte value)
-{
-  Wire.beginTransmission(s7sAddress);
-  Wire.write(0x7A);  // Set brightness command byte
-  Wire.write(value);  // brightness data byte
-  Wire.endTransmission();
-}
-
-// Turn on any, none, or all of the decimals.
-//  The six lowest bits in the decimals parameter sets a decimal 
-//  (or colon, or apostrophe) on or off. A 1 indicates on, 0 off.
-//  [MSB] (X)(X)(Apos)(Colon)(Digit 4)(Digit 3)(Digit2)(Digit1)
-void setDecimalsI2C(byte decimals)
-{
-  Wire.beginTransmission(s7sAddress);
-  Wire.write(0x77);
-  Wire.write(decimals);
-  Wire.endTransmission();
-}
-
 uint32_t tapTempoTimerMath( uint16_t BPMInput )
 {
 	uint32_t returnVar = 0;
@@ -473,7 +479,3 @@ uint32_t tapTempoTimerMath( uint16_t BPMInput )
 	returnVar = 2500000 /( (uint32_t)BPMInput );
 	return returnVar;
 }
-  
-
-
-

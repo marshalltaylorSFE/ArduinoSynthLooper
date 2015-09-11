@@ -39,7 +39,7 @@ MicroLL::MicroLL( void )
 {
   startObjectPtr = &nullObject;
   currentPosition = 0;
-  maxLength = 40;
+  maxLength = 1000;
   nullObject.eventType = 0xAA;
   
 
@@ -269,3 +269,10 @@ void MicroLL::printfMicroLL( void )
 
 }
 
+void MicroLL::clear( void )
+{
+	while( currentPosition > 0 )
+	{
+		dropObject( 0 );
+	}
+}

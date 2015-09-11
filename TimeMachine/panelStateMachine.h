@@ -52,6 +52,9 @@ public:
   uint8_t screenControlTap;
   uint8_t recording;
   uint8_t playing;
+  uint8_t trackNum;
+  uint8_t recordingTrack;
+  uint8_t clearAll;
   
   //State machine stuff  
   PStates state;

@@ -48,6 +48,10 @@ PanelStateMachine::PanelStateMachine()
 	markLength = 0;
 	screenControlTap = 0;
 	
+	trackNum = 1;
+	recordingTrack = 0;
+	clearAll = 0;
+	
 	state = PIdle;
 }
 
@@ -95,6 +99,9 @@ void PanelStateMachine::tick()
 			playLED = LEDOFF;
 			overdubLED = LEDON;
 			nextState = POverdub;
+			recording = 1;
+			trackNum++;
+			recordingTrack++;
 		}
 		playButton = 0;
 		break;
@@ -105,6 +112,7 @@ void PanelStateMachine::tick()
 			playLED = LEDON;
 			overdubLED = LEDOFF;
 			nextState = PPlay;
+			recording = 0;
 		}
 		playButton = 0;
 		break;
@@ -129,6 +137,9 @@ void PanelStateMachine::tick()
 	{
 		stopButton = 0;
 		recordLED = LEDFLASHINGFAST;
+		trackNum = 1;
+		recordingTrack = 0;
+		clearAll = 1;
 	}
     state = nextState;
 

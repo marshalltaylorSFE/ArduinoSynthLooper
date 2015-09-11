@@ -42,12 +42,12 @@
 
 
 MidiFile::MidiFile(MemFile& input) {
-   ticksPerQuarterNote = 120;            // TQP time base of file
-   trackCount = 1;                       // # of tracks in file
-   theTrackState = TRACK_STATE_SPLIT;    // joined or split
-   theTimeState = TIME_STATE_DELTA;      // absolute or delta
-
-   read(input);
+	ticksPerQuarterNote = 120;            // TQP time base of file
+	trackCount = 1;                       // # of tracks in file
+	theTrackState = TRACK_STATE_SPLIT;    // joined or split
+	theTimeState = TIME_STATE_DELTA;      // absolute or delta
+	nextEmptyTrack = 0;
+	read(input);
 }
 
 
@@ -364,10 +364,9 @@ void MidiFile::read(MemFile& input)
 		 switch(i)
 		 {
 		 case 0:
-			track1.pushObject(tempEvent);
+			track[0].pushObject(tempEvent);
 			break;
 		 case 1:
-			track2.pushObject(tempEvent);
 			break;
 		 default:
 			break;

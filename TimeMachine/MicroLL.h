@@ -63,6 +63,7 @@ class MicroLL
 	int8_t seekObjectbyNoteValue( listObject_t & ); //pass listObject_t, returns position
     listIdemNumber_t listLength( void ); //returns depth of stack.
     void printfMicroLL( void );
+	void clear( void );
 
 
 };
