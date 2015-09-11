@@ -93,7 +93,7 @@ void handleNoteOn(byte channel, byte pitch, byte velocity)
 		MidiEvent tempEvent;
 		tempEvent.timeStamp = tapHead.getTotalPulses();
 		tempEvent.eventType = 0x90;
-		tempEvent.channel = 1;
+		tempEvent.channel = channel;
 		tempEvent.value = pitch;
 		tempEvent.data = velocity;
 		track[panelSM.recordingTrack].pushObject( tempEvent );
@@ -110,7 +110,7 @@ void handleNoteOff(byte channel, byte pitch, byte velocity)
 		MidiEvent tempEvent;
 		tempEvent.timeStamp = tapHead.getTotalPulses();
 		tempEvent.eventType = 0x80;
-		tempEvent.channel = 1;
+		tempEvent.channel = channel;
 		tempEvent.value = pitch;
 		tempEvent.data = 0;
 		track[panelSM.recordingTrack].pushObject( tempEvent );
@@ -395,11 +395,11 @@ void loop()
 						switch( playBackNote[i]->eventType )
 						{
 						case 0x90: //Note on
-							midiA.sendNoteOn( playBackNote[i]->value, playBackNote[i]->data, 1 );
+							midiA.sendNoteOn( playBackNote[i]->value, playBackNote[i]->data, playBackNote[i]->channel );
 							Serial.println("Note On");
 							break;
 						case 0x80: //Note off
-							midiA.sendNoteOff( playBackNote[i]->value, playBackNote[i]->data, 1 );
+							midiA.sendNoteOff( playBackNote[i]->value, playBackNote[i]->data, playBackNote[i]->channel );
 							Serial.println("Note Off");
 							break;
 						default:

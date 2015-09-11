@@ -252,7 +252,7 @@ void MicroLL::printfMicroLL( void )
     Serial.print(", 0x");
     Serial.print(tempObject->eventType, HEX);
     Serial.print(", ");
-    //Serial.print(tempObject->channel);
+    Serial.print(tempObject->channel);
     Serial.print(", ");
     Serial.print(tempObject->value);
     Serial.print(", ");
