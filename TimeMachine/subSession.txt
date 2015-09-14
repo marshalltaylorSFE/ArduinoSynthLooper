@@ -1,0 +1,12 @@
+<NotepadPlus>
+    <Session activeView="0">
+        <mainView activeIndex="0">
+            <File firstVisibleLine="13" xOffset="0" scrollWidth="987" startPos="974" endPos="974" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\midiDB.cpp" />
+            <File firstVisibleLine="0" xOffset="0" scrollWidth="987" startPos="409" endPos="376" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\midiDB.h" />
+        </mainView>
+        <subView activeIndex="1">
+            <File firstVisibleLine="0" xOffset="0" scrollWidth="728" startPos="257" endPos="257" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\MicroLL.cpp" />
+            <File firstVisibleLine="9" xOffset="0" scrollWidth="728" startPos="563" endPos="572" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\MicroLL.h" />
+        </subView>
+    </Session>
+</NotepadPlus>

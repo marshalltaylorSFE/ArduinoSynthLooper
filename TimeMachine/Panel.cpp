@@ -37,6 +37,8 @@ Panel::Panel( void )
 {
 	songNum = 1;
 	trackNum = 1;
+	flasherState = 0;
+	fastFlasherState = 0;
 }
 
 void Panel::init( void )
@@ -81,7 +83,12 @@ void Panel::init( void )
 	expanderA.pinMode( trackUpButtonPin, INPUT_PULLUP, &trackUpButton );
 	expanderA.pinMode( trackDownButtonPin, INPUT_PULLUP, &trackDownButton );
 	expanderA.init( 0x3E );
-  
+	
+	leftDisplay.init( 0x71, &flasherState, &fastFlasherState );
+	rightDisplay.init( 0x30, &flasherState, &fastFlasherState );
+	
+ 	flasherState = 0;
+	fastFlasherState = 0;
 }
 
 void Panel::update( void )
@@ -117,6 +124,8 @@ void Panel::update( void )
 	option3Button.update();
 	option4Button.update();
 	
+	leftDisplay.update();
+	rightDisplay.update();
 }
 
 void Panel::timersMIncrement( uint8_t inputValue )

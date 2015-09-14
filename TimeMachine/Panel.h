@@ -42,6 +42,11 @@ public:
 	
 	sx1509HardCode expanderA;
 	
+	char tempString[10];  // Will be used with sprintf to create strings
+	sSDisplay leftDisplay;
+	sSDisplay rightDisplay;
+
+	
 	int8_t songNum;
 	int8_t trackNum;
 protected:
