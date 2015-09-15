@@ -34,7 +34,7 @@ IntervalTimer myTimer;
 //  Set MAXTIMER to overflow number in the header.  MAXTIMER + MAXINTERVAL
 //    cannot exceed variable size.
 
-TimerClass32 debugTimerClass( 333000 );
+TimerClass32 midiPlayTimer( 1000 );
 TimerClass32 panelUpdateTimer(10000);
 uint8_t debugLedStates = 1;
 
@@ -69,6 +69,8 @@ MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiA);
 #include "midiDB.h"
 MidiSong currentSong;
 
+uint8_t fixedFirstNote = 0;
+
 uint8_t rxLedFlag = 0;
 
 void handleNoteOn(byte channel, byte pitch, byte velocity)
@@ -77,7 +79,7 @@ void handleNoteOn(byte channel, byte pitch, byte velocity)
 	if( myLooperPanel.recording == 1 )
 	{
 		MidiEvent tempEvent;
-		tempEvent.timeStamp = tapHead.getTotalPulses();
+		tempEvent.timeStamp = tapHead.getQuantizedPulses( myLooperPanel.quantizeTicks );
 		tempEvent.eventType = 0x90;
 		tempEvent.channel = channel;
 		tempEvent.value = pitch;
@@ -91,11 +93,28 @@ void handleNoteOn(byte channel, byte pitch, byte velocity)
 void handleNoteOff(byte channel, byte pitch, byte velocity)
 {
 	rxLedFlag = 1;
-
-	if( myLooperPanel.recording == 1 )
+	
+	if(( myLooperPanel.songHasData == 0 ) && (fixedFirstNote == 0))
+	{
+		//wedge in a note on
+		MidiEvent tempEvent;
+		tempEvent.timeStamp = 0;
+		tempEvent.eventType = 0x90;
+		tempEvent.channel = channel;
+		tempEvent.value = pitch;
+		tempEvent.data = velocity;
+		
+		currentSong.recordNote( tempEvent );
+		fixedFirstNote = 1;
+	}
+	if(( myLooperPanel.recording == 1 ))
 	{
 		MidiEvent tempEvent;
-		tempEvent.timeStamp = tapHead.getTotalPulses();
+		tempEvent.timeStamp = tapHead.getQuantizedPulses( myLooperPanel.quantizeTicks );
+		if(tempEvent.timeStamp >= loopLength )
+		{
+			tempEvent.timeStamp = tempEvent.timeStamp - loopLength;
+		}
 		tempEvent.eventType = 0x80;
 		tempEvent.channel = channel;
 		tempEvent.value = pitch;
@@ -146,7 +165,7 @@ void loop()
 {
 //**Copy to make a new timer******************//  
 //   msTimerA.update(usTicks);
-	debugTimerClass.update(usTicks);
+	midiPlayTimer.update(usTicks);
 	ledToggleTimer.update(usTicks);
 	ledToggleFastTimer.update(usTicks);
 	panelUpdateTimer.update(usTicks);
@@ -191,12 +210,13 @@ void loop()
 		}
 		if( myLooperPanel.serviceMarkLength() )
 		{
-			loopLength = tapHead.getTotalPulses();
+			loopLength = tapHead.getQuantizedPulses( myLooperPanel.quantizeTrackTicks );
 		}
 		if( myLooperPanel.serviceSongClearRequest() )
 		{
 			currentSong.clear();
 			loopLength = 0xFFFFFFFF;
+			fixedFirstNote = 0;
 		}
 		if( myLooperPanel.serviceBPMUpdateRequest() )
 		{
@@ -206,6 +226,7 @@ void loop()
 		currentSong.setRecordingTrack( myLooperPanel.getRecordingTrack() );
 	}
 	
+
 	//**Tap Tempo Pulse Timer*********************//  
 	if(tapTempoPulseTimer.flagStatus() == PENDING)
 	{
@@ -227,7 +248,12 @@ void loop()
 			currentSong.reset();
 			
 		}
-		
+
+	
+	}
+	
+	if(midiPlayTimer.flagStatus() == PENDING)
+	{
 		//Send midi data OUT
 		if( myLooperPanel.playing == 1 )
 		{
@@ -255,13 +281,6 @@ void loop()
 			}
 			
 		}
-		
-
-	}
-	
-	if(debugTimerClass.flagStatus() == PENDING)
-	{
-
 	}
 	
 	//**Fast LED toggling of the panel class***********//  

@@ -18,6 +18,8 @@ LooperPanel::LooperPanel( void )
 	
 	songClearRequestFlag = 0;
 	
+	quantizingTrackFlag = 0;
+	
 	for( int i = 0; i < 16; i++ )
 	{
 		trackMute[i] = 0; //Not muted
@@ -31,6 +33,13 @@ LooperPanel::LooperPanel( void )
 	BPMUpdateRequestFlag = 0;
 	
 	state = PInit;
+	
+	quantizeTrackTicks = 24;
+	quantizeTicks = 24;
+	
+	songHasData = 0;
+	allowOverRide = 0;
+	
 }
 
 void LooperPanel::setTapLed( void )
@@ -144,14 +153,30 @@ void LooperPanel::processMachine( void )
 			trackMute[ viewingTrack - 1 ] ^= 1;
 		}
 	}
+	if( option2Button.serviceRisingEdge() )
+	{
+		quantizingTrackFlag = 1;
+		option2Led.setState( LEDFLASHINGFAST );
+		quantizingTrackTimeKeeper.mClear();
+	}
+	if(( quantizingTrackTimeKeeper.mGet() > 2000 ) && ( quantizingTrackFlag == 1 ))
+	{
+		option2Led.setState( LEDOFF );
+		quantizingTrackFlag = 0;
+		rightDisplay.setData("    ");
+	}
 	if( songUpButton.serviceRisingEdge() )
 	{
 		BPM++;
+		BPMUpdateRequestFlag = 1;
 	}
+	
 	if( songDownButton.serviceRisingEdge() )
 	{
 		BPM--;
+		BPMUpdateRequestFlag = 1;
 	}
+	
 	if( trackUpButton.serviceRisingEdge() )
 	{
 		if( viewingTrack < ( recordingTrack + 1 ) )
@@ -161,10 +186,15 @@ void LooperPanel::processMachine( void )
 			{
 				rightDisplay.setState( SSON );
 			}
-			sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-			rightDisplay.setData(tempString);
+			else
+			{
+				rightDisplay.setState( SSFLASHING );
+				sprintf(tempString, "%4d", (unsigned int)viewingTrack);
+				rightDisplay.setData(tempString);
+			}
 		}
 	}
+	
 	if( trackDownButton.serviceRisingEdge() )
 	{
 		if( viewingTrack > 1 )
@@ -188,6 +218,7 @@ void LooperPanel::processMachine( void )
 			option1Led.setState(LEDOFF);
 		}
 	}
+	
 	if( viewingTrack == ( recordingTrack + 1 ) )
 	{
 		option1Led.setState(LEDOFF);
@@ -196,6 +227,64 @@ void LooperPanel::processMachine( void )
 	if(( recording ) || ( playing ) )
 	{
 		leftDisplay.setData(tapHeadMessage);
+	}
+	
+	if( quantizeSelector.serviceChanged() )
+	{
+		uint8_t displayDivisor = 0;
+		uint8_t tickDivisor = 0;
+		//Calculate data
+		tempString[0] = ' ';
+		tempString[1] = ' ';
+		tempString[2] = ' ';
+		tempString[3] = ' ';
+		tempString[4] = '\0';
+		if( quantizeSelector.getState() < 4 )
+		{
+			//We are in 1/4 domain
+			displayDivisor = 4;
+			for( int i = 0; i < ( quantizeSelector.getState() ); i++ )
+			{
+				displayDivisor = displayDivisor * 2;
+			}
+			tickDivisor = 24 / ( displayDivisor / 4 );
+			//Build the display string
+			sprintf(tempString, "%4d", (unsigned int)displayDivisor);
+			tempString[0] = '1';
+			tempString[1] = ' ';
+		}
+		if( quantizeSelector.getState() > 5 )
+		{
+			//We are in 1/3 domain
+			displayDivisor = 3;
+			for( int i = 0; i < ( 9 - quantizeSelector.getState() ); i++ )
+			{
+				displayDivisor = displayDivisor * 2;
+			}
+			//tickDivisor = 24 / ( displayDivisor / 3 );
+			//Build the display string
+			sprintf(tempString, "%4d", (unsigned int)displayDivisor);
+			tempString[0] = '1';
+			tempString[1] = ' ';
+		}
+
+		
+		if( quantizingTrackFlag == 1 )
+		{
+			quantizingTrackTimeKeeper.mClear();
+			rightDisplay.setState( SSON );
+			rightDisplay.setData( tempString );
+			quantizeTrackTicks = tickDivisor;
+			Serial.print("quantizeTrackTicks = ");
+			Serial.println(quantizeTrackTicks);
+		}
+		else
+		{
+			rightDisplay.peekThrough( tempString, 1000 ); // 'data' type, time in ms to persist
+			quantizeTicks = tickDivisor;
+			Serial.print("quantizeTicks = ");
+			Serial.println(quantizeTicks);
+		}
 	}
 	
 	update();
@@ -224,13 +313,40 @@ void LooperPanel::tickStateMachine()
 		//Can't be running, if button pressed move on
 		if( playButton.serviceRisingEdge() )
 		{
-			recordLed.setState(LEDON);
-			playLed.setState(LEDOFF);
-			overdubLed.setState(LEDOFF);
-			resetTapHeadFlag = 1;
-			screenControlTap = 1;
-			recording = 1;
-			nextState = PFirstRecord;
+			if( songHasData == 0 )
+			{
+				recordLed.setState(LEDON);
+				playLed.setState(LEDOFF);
+				overdubLed.setState(LEDOFF);
+				resetTapHeadFlag = 1;
+				screenControlTap = 1;
+				recording = 1;
+				nextState = PFirstRecord;
+			}
+			else
+			{
+				resetTapHeadFlag = 1;
+				recordLed.setState(LEDOFF);
+				playLed.setState(LEDON);
+				overdubLed.setState(LEDOFF);
+				playing = 1;
+				recording = 0;
+				nextState = PPlay;
+				
+				if( quantizingTrackFlag != 1 )
+				{
+					rightDisplay.setState( SSON );
+					viewingTrack = recordingTrack + 1;
+					sprintf(tempString, "%4d", (unsigned int)viewingTrack);
+					rightDisplay.setData(tempString);
+				}
+			}
+		}
+		if( quantizingTrackFlag != 1 )
+		{
+			sprintf(tempString, "%4d", (unsigned int)viewingTrack);
+			rightDisplay.setData(tempString);
+			rightDisplay.setState(SSON);
 		}
         break;
 	case PFirstRecord:
@@ -244,13 +360,18 @@ void LooperPanel::tickStateMachine()
 			playing = 1;
 			recording = 0;
 			nextState = PPlay;
-
+			songHasData = 1;
+			allowOverRide = 1;
+			
 			recordingTrack++;
 			
-			rightDisplay.setState( SSON );
-			viewingTrack = recordingTrack + 1;
-			sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-			rightDisplay.setData(tempString);
+			if( quantizingTrackFlag != 1 )
+			{
+				rightDisplay.setState( SSON );
+				viewingTrack = recordingTrack + 1;
+				sprintf(tempString, "%4d", (unsigned int)viewingTrack);
+				rightDisplay.setData(tempString);
+			}
 
 		}
         break;
@@ -262,7 +383,12 @@ void LooperPanel::tickStateMachine()
 			overdubLed.setState(LEDON);
 			nextState = POverdub;
 			recording = 1;
-
+			if( quantizingTrackFlag != 1 )
+			{
+				sprintf(tempString, "%4d", (unsigned int)viewingTrack);
+				rightDisplay.setData(tempString);
+				rightDisplay.setState(SSON);
+			}
 			
 		}
 		break;
@@ -277,10 +403,14 @@ void LooperPanel::tickStateMachine()
 			
 			recordingTrack++;
 			
-			rightDisplay.setState( SSON );
-			viewingTrack = recordingTrack + 1;
-			sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-			rightDisplay.setData(tempString);
+			if( quantizingTrackFlag != 1 )
+			{
+				rightDisplay.setState( SSON );
+				viewingTrack = recordingTrack + 1;
+				sprintf(tempString, "%4d", (unsigned int)viewingTrack);
+				rightDisplay.setData(tempString);
+			}
+			allowOverRide = 1;
 
 		}
 		break;
@@ -298,6 +428,7 @@ void LooperPanel::tickStateMachine()
 		nextState = PIdle;
 		recording = 0;
 		playing = 0;
+		allowOverRide = 0;
 		
 	}
 	else if( stopButton.serviceHoldRisingEdge() )
@@ -309,6 +440,8 @@ void LooperPanel::tickStateMachine()
 		viewingTrack = 1;
 		sprintf(tempString, "%4d", (unsigned int)viewingTrack);
 		rightDisplay.setData(tempString);
+		songHasData = 0;
+		allowOverRide = 0;
 	}
 
     state = nextState;
@@ -374,8 +507,8 @@ void LooperPanel::setTapHeadMessage( BeatCode & inputHead )
 	tapHeadMessage[0] = tempString[2];
 	
 	tapHeadMessage[4] = '\0';
-	Serial.println(tapHeadMessage);
-	Serial.println(inputHead.beats);
+	//Serial.println(tapHeadMessage);
+	//Serial.println(inputHead.beats);
 	
 }
 
@@ -391,4 +524,24 @@ void LooperPanel::getTrackMute( uint8_t * workingArray )
 uint8_t LooperPanel::getRecordingTrack( void )
 {
 	return recordingTrack;
+}
+
+void LooperPanel::timersMIncrement( uint8_t inputValue )
+{
+	tapButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	syncButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	songUpButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	songDownButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	trackUpButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	trackDownButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	playButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	stopButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	option1Button.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	option2Button.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	option3Button.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	option4Button.buttonDebounceTimeKeeper.mIncrement(inputValue);
+	
+	rightDisplay.peekThroughTimeKeeper.mIncrement(inputValue);
+
+	quantizingTrackTimeKeeper.mIncrement(inputValue);
 }

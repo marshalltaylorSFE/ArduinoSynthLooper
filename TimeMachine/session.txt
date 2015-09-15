@@ -12,8 +12,6 @@
             <File firstVisibleLine="0" xOffset="0" scrollWidth="1" startPos="0" endPos="0" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\MemFile.h" />
             <File firstVisibleLine="205" xOffset="0" scrollWidth="752" startPos="8164" endPos="8164" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\MidiFile.cpp" />
             <File firstVisibleLine="37" xOffset="0" scrollWidth="8408" startPos="2241" endPos="2218" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\MidiFile.h" />
-            <File firstVisibleLine="9" xOffset="0" scrollWidth="752" startPos="976" endPos="976" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\panelStateMachine.cpp" />
-            <File firstVisibleLine="17" xOffset="0" scrollWidth="752" startPos="1141" endPos="1141" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\panelStateMachine.h" />
             <File firstVisibleLine="0" xOffset="0" scrollWidth="1" startPos="0" endPos="0" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\TimeCode.cpp" />
             <File firstVisibleLine="0" xOffset="0" scrollWidth="1" startPos="0" endPos="0" selMode="0" lang="C++" encoding="-1" filename="D:\github\ArduinoSynthLooper\TimeMachine\TimeCode.h" />
         </subView>

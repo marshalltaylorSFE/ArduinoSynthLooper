@@ -128,23 +128,6 @@ void Panel::update( void )
 	rightDisplay.update();
 }
 
-void Panel::timersMIncrement( uint8_t inputValue )
-{
-	tapButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	syncButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	songUpButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	songDownButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	trackUpButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	trackDownButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	playButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	stopButton.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	option1Button.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	option2Button.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	option3Button.buttonDebounceTimeKeeper.mIncrement(inputValue);
-	option4Button.buttonDebounceTimeKeeper.mIncrement(inputValue);
-
-}
-
 void Panel::toggleFlasherState( void )
 {
 	flasherState ^= 0x01;

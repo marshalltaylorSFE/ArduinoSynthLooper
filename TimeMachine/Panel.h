@@ -10,7 +10,6 @@ public:
 	Panel( void );
 	void update( void );
 	void init( void );
-	void timersMIncrement( uint8_t );
 	void toggleFlasherState( void );
 	void toggleFastFlasherState( void );
 

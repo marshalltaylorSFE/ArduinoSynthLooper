@@ -21,12 +21,12 @@ void MidiSong::recordNote( listObject_t & noteToRecord )//Pass ( noteToRecord )
 uint8_t MidiSong::getNextNote( listObject_t & outputNote, uint32_t currentTimeTotalPulses )//Pass ( note to play next, time ) Returns: play note flag
 {
 	uint8_t returnVar = 0;
-	
+	uint8_t foundNoteFlag = 0;
 	//Scan the tracks for a note to play
 	for( int i = 0; i < 16; i++ )
 	{
 		//if we're looking at the null note, move on
-		if( playBackNote[i] != &track[i].nullObject )
+		if((playBackNote[i] != &track[i].nullObject ) && ( foundNoteFlag == 0 ))
 		{
 			//Serial.println("Real object");
 			//If the pulse count is greater than the next note, play it
@@ -38,13 +38,14 @@ uint8_t MidiSong::getNextNote( listObject_t & outputNote, uint32_t currentTimeTo
 					//Roll out the flags
 					txLedEnableFlag = 1;
 					returnVar = 1;
-				
+					foundNoteFlag = 1; //We found one enabled!
 					//Point the output at this note
 					outputNote = *playBackNote[i];
 				}
 
 				// move to the next note always
-				if( playBackNote[i]->nextObject != &track[i].nullObject )
+				//note is not null, move to the next (may be null)
+				//if( playBackNote[i]->nextObject != &track[i].nullObject )
 				{
 					playBackNote[i] = playBackNote[i]->nextObject;
 				}

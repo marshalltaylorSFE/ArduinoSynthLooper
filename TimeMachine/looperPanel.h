@@ -47,6 +47,13 @@ public:
 	uint8_t playing;
 	uint16_t BPM;
 
+	void timersMIncrement( uint8_t );
+
+	uint8_t quantizeTrackTicks;
+	uint8_t quantizeTicks;
+	
+	uint8_t songHasData;
+	uint8_t allowOverRide;
 private:
 	//State machine stuff  
 	PStates state;
@@ -68,6 +75,8 @@ private:
 	uint8_t rxLedFlag;
 	uint8_t txLedFlag;
 	
+	uint8_t quantizingTrackFlag;
+	TimeKeeper quantizingTrackTimeKeeper;
 };
 
 #endif

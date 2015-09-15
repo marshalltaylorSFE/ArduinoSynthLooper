@@ -42,7 +42,7 @@ class BeatCode
     uint8_t beats;
     uint8_t bars;
     uint8_t eightBars;
-
+	uint32_t getQuantizedPulses( uint8_t ); //pass ticks
 };
 
 #endif // TIMECODE_H_INCLUDED

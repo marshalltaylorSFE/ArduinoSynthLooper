@@ -26,7 +26,7 @@
 //                MIDI data is stored by track in an array.  This
 //                class is used for example in the MidiPerform class.
 //
-#define MIDIFILE_DEBUG
+//#define MIDIFILE_DEBUG
 
 #include "MidiFile.h"
 //#include "Binasc.h"
