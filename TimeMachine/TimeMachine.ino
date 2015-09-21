@@ -76,7 +76,7 @@ uint8_t rxLedFlag = 0;
 void handleNoteOn(byte channel, byte pitch, byte velocity)
 {
 	rxLedFlag = 1;
-	if( myLooperPanel.recording == 1 )
+	if( myLooperPanel.recordingFlag.getFlag() )
 	{
 		MidiEvent tempEvent;
 		tempEvent.timeStamp = tapHead.getQuantizedPulses( myLooperPanel.quantizeTicks );
@@ -94,7 +94,7 @@ void handleNoteOff(byte channel, byte pitch, byte velocity)
 {
 	rxLedFlag = 1;
 	
-	if(( myLooperPanel.songHasData == 0 ) && (fixedFirstNote == 0))
+	if(( myLooperPanel.songHasDataFlag.getFlag() ) && (fixedFirstNote == 0))
 	{
 		//wedge in a note on
 		MidiEvent tempEvent;
@@ -107,7 +107,7 @@ void handleNoteOff(byte channel, byte pitch, byte velocity)
 		currentSong.recordNote( tempEvent );
 		fixedFirstNote = 1;
 	}
-	if(( myLooperPanel.recording == 1 ))
+	if(( myLooperPanel.recordingFlag.getFlag() ))
 	{
 		MidiEvent tempEvent;
 		tempEvent.timeStamp = tapHead.getQuantizedPulses( myLooperPanel.quantizeTicks );
@@ -199,27 +199,36 @@ void loop()
 			myLooperPanel.setRxLed();
 		}
 		myLooperPanel.setTapHeadMessage(tapHead);
-		
 		//Tick the machine
 		myLooperPanel.processMachine();
 		
 		//Deal with outputs
-		if( myLooperPanel.serviceResetTapHead() )
+		if( myLooperPanel.resetTapHeadFlag.serviceRisingEdge() )
 		{
+			myLooperPanel.resetTapHeadFlag.clearFlag();
 			tapHead.zero();
+			Serial.println("Zero'd head");
 		}
-		if( myLooperPanel.serviceMarkLength() )
+		if( myLooperPanel.markLengthFlag.serviceRisingEdge() )
 		{
+			myLooperPanel.markLengthFlag.clearFlag();
 			loopLength = tapHead.getQuantizedPulses( myLooperPanel.quantizeTrackTicks );
 		}
-		if( myLooperPanel.serviceSongClearRequest() )
+		if( myLooperPanel.clearSongFlag.serviceRisingEdge() )
 		{
+			myLooperPanel.clearSongFlag.clearFlag();
 			currentSong.clear();
 			loopLength = 0xFFFFFFFF;
 			fixedFirstNote = 0;
 		}
-		if( myLooperPanel.serviceBPMUpdateRequest() )
+		if( myLooperPanel.clearTrackFlag.serviceRisingEdge() )
 		{
+			currentSong.clearTrack( myLooperPanel.trackToClear );
+			myLooperPanel.clearTrackFlag.clearFlag();
+		}
+		if( myLooperPanel.updateBPMFlag.serviceRisingEdge() )
+		{
+			myLooperPanel.updateBPMFlag.clearFlag();
 			//Update the BPM
 			tapTempoPulseTimer.setInterval( tapTempoTimerMath( myLooperPanel.BPM ) );
 		}
@@ -255,7 +264,7 @@ void loop()
 	if(midiPlayTimer.flagStatus() == PENDING)
 	{
 		//Send midi data OUT
-		if( myLooperPanel.playing == 1 )
+		if( myLooperPanel.playingFlag.getFlag() )
 		{
 			uint8_t tempEnabledArray[16];
 			myLooperPanel.getTrackMute( tempEnabledArray );

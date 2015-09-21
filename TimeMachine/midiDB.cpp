@@ -99,6 +99,12 @@ void MidiSong::clear( void )
 	}
 }
 
+
+void MidiSong::clearTrack( uint8_t inputTrack )
+{
+	track[inputTrack].clear();
+}
+
 void MidiSong::setPlayEnabled( uint8_t * workingArray )
 {
 	for( int i = 0; i < 16; i++ )

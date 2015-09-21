@@ -14,6 +14,7 @@ public:
 	void reset( void );
 	uint8_t txLedFlagService( void );
 	void clear( void );
+	void clearTrack( uint8_t );
 	void setPlayEnabled( uint8_t * );
 	
 private:

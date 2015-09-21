@@ -3,22 +3,14 @@
 //#include "PanelComponents.h"
 #include "Panel.h"
 #include "Arduino.h"
+#include "flagMessaging.h"
 
 LooperPanel::LooperPanel( void )
 {
 	//Controls
-	resetTapHeadFlag = 0;
-	markLengthFlag = 0;
-	screenControlTap = 0;
-	
 	//trackNum = 1;
 	viewingTrack = 1;
 	recordingTrack = 0;
-	recording = 0;
-	
-	songClearRequestFlag = 0;
-	
-	quantizingTrackFlag = 0;
 	
 	for( int i = 0; i < 16; i++ )
 	{
@@ -30,15 +22,11 @@ LooperPanel::LooperPanel( void )
 	txLedFlag = 0;
 	rxLedFlag = 0;	
 	BPM = 80;
-	BPMUpdateRequestFlag = 0;
 	
 	state = PInit;
 	
 	quantizeTrackTicks = 24;
 	quantizeTicks = 24;
-	
-	songHasData = 0;
-	allowOverRide = 0;
 	
 }
 
@@ -132,18 +120,32 @@ void LooperPanel::reset( void )
 	
 }
 
+//---------------------------------------------------------------------------//
+//
+//  To process the machine,
+//    take the inputs from the system
+//    process human interaction hard-codes
+//    process the state machine
+//    clean up and post output data
+//
+//---------------------------------------------------------------------------//
 void LooperPanel::processMachine( void )
 {
-	//Do external updates
-	tapLed.setState(serviceTapLed());
-	syncLed.setState(serviceTapLed());
-	txLed.setState(serviceTxLed());
-	rxLed.setState(serviceRxLed());
-	
-	//Do main machine
-	tickStateMachine();
-	
 	//Do small machines
+	if( trackDownButton.serviceRisingEdge() )
+	{
+		if( viewingTrack > 1 )
+		{
+			viewingTrack--;
+		}
+	}
+	if( trackUpButton.serviceRisingEdge() )
+	{
+		if( viewingTrack < ( recordingTrack + 1 ) )
+		{
+			viewingTrack++;
+		}
+	}
 	if( option1Button.serviceRisingEdge() )
 	{
 		if( viewingTrack != ( recordingTrack + 1 ) )
@@ -155,57 +157,100 @@ void LooperPanel::processMachine( void )
 	}
 	if( option2Button.serviceRisingEdge() )
 	{
-		quantizingTrackFlag = 1;
+		quantizingTrackFlag.setFlag();
 		option2Led.setState( LEDFLASHINGFAST );
 		quantizingTrackTimeKeeper.mClear();
 	}
-	if(( quantizingTrackTimeKeeper.mGet() > 2000 ) && ( quantizingTrackFlag == 1 ))
-	{
-		option2Led.setState( LEDOFF );
-		quantizingTrackFlag = 0;
-		rightDisplay.setData("    ");
-	}
+
 	if( songUpButton.serviceRisingEdge() )
 	{
 		BPM++;
-		BPMUpdateRequestFlag = 1;
+		updateBPMFlag.setFlag();
 	}
 	
 	if( songDownButton.serviceRisingEdge() )
 	{
 		BPM--;
-		BPMUpdateRequestFlag = 1;
+		updateBPMFlag.setFlag();
 	}
-	
-	if( trackUpButton.serviceRisingEdge() )
+
+	if( quantizeSelector.serviceChanged() )
 	{
-		if( viewingTrack < ( recordingTrack + 1 ) )
+		uint8_t displayDivisor = 0;
+		uint8_t tickDivisor = 0;
+		quantizeMessage[0] = ' ';
+		quantizeMessage[1] = ' ';
+		quantizeMessage[2] = ' ';
+		quantizeMessage[3] = ' ';
+		
+		//Calculate data
+		if( quantizeSelector.getState() < 4 )
 		{
-			viewingTrack++;
-			if(viewingTrack == ( recordingTrack + 1 ) )
+			//We are in 1/4 domain
+			displayDivisor = 4;
+			for( int i = 0; i < ( quantizeSelector.getState() ); i++ )
 			{
-				rightDisplay.setState( SSON );
+				displayDivisor = displayDivisor * 2;
+			}
+			tickDivisor = 24 / ( displayDivisor / 4 );
+			//Build the display string
+			sprintf(quantizeMessage, "%4d", (unsigned int)displayDivisor);
+			quantizeMessage[0] = '1';
+			quantizeMessage[1] = ' ';
+		}
+		if( quantizeSelector.getState() > 5 )
+		{
+			//We are in 1/3 domain
+			displayDivisor = 3;
+			for( int i = 0; i < ( 9 - quantizeSelector.getState() ); i++ )
+			{
+				displayDivisor = displayDivisor * 2;
+			}
+			//tickDivisor = 24 / ( displayDivisor / 3 );
+			//Build the display string
+			sprintf(quantizeMessage, "%4d", (unsigned int)displayDivisor);
+			quantizeMessage[0] = '1';
+			quantizeMessage[1] = ' ';
+		}
+		quantizeMessage[4] = '\0';		
+	    
+		if( quantizingTrackFlag.getFlag() )
+		{
+			quantizingTrackTimeKeeper.mClear();
+			quantizeTrackTicks = tickDivisor;
+		}
+		else
+		{
+			if( quantizeHoldOffFlag.getFlag() == 1 )
+			{
+				rightDisplay.peekThrough( quantizeMessage, 1500 ); // 'data' type, time in ms to persist
 			}
 			else
 			{
-				rightDisplay.setState( SSFLASHING );
-				sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-				rightDisplay.setData(tempString);
+				//Throw away the first reading
+				quantizeHoldOffFlag.setFlag();
 			}
+			quantizeTicks = tickDivisor;
 		}
+		
+
 	}
-	
-	if( trackDownButton.serviceRisingEdge() )
+	if(( quantizingTrackTimeKeeper.mGet() > 2000 )&&( quantizingTrackFlag.getFlag() == 1 ))
 	{
-		if( viewingTrack > 1 )
-		{
-			viewingTrack--;
-			rightDisplay.setState( SSFLASHING );
-			sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-			rightDisplay.setData(tempString);
-		}
+		quantizingTrackFlag.clearFlag();
 	}
 
+	//Do main machine
+	tickStateMachine();
+	
+	//Do pure LED operations first
+	//System level LEDs
+	tapLed.setState(serviceTapLed());
+	syncLed.setState(serviceTapLed());
+	txLed.setState(serviceTxLed());
+	rxLed.setState(serviceRxLed());
+	
+	//Panel level LEDs
 	if( viewingTrack != ( recordingTrack + 1 ) )
 	{
 		//Ok to give extra options
@@ -224,76 +269,85 @@ void LooperPanel::processMachine( void )
 		option1Led.setState(LEDOFF);
 	}
 	
-	if(( recording ) || ( playing ) )
-	{
-		leftDisplay.setData(tapHeadMessage);
-	}
-	
-	if( quantizeSelector.serviceChanged() )
-	{
-		uint8_t displayDivisor = 0;
-		uint8_t tickDivisor = 0;
-		//Calculate data
-		tempString[0] = ' ';
-		tempString[1] = ' ';
-		tempString[2] = ' ';
-		tempString[3] = ' ';
-		tempString[4] = '\0';
-		if( quantizeSelector.getState() < 4 )
-		{
-			//We are in 1/4 domain
-			displayDivisor = 4;
-			for( int i = 0; i < ( quantizeSelector.getState() ); i++ )
-			{
-				displayDivisor = displayDivisor * 2;
-			}
-			tickDivisor = 24 / ( displayDivisor / 4 );
-			//Build the display string
-			sprintf(tempString, "%4d", (unsigned int)displayDivisor);
-			tempString[0] = '1';
-			tempString[1] = ' ';
-		}
-		if( quantizeSelector.getState() > 5 )
-		{
-			//We are in 1/3 domain
-			displayDivisor = 3;
-			for( int i = 0; i < ( 9 - quantizeSelector.getState() ); i++ )
-			{
-				displayDivisor = displayDivisor * 2;
-			}
-			//tickDivisor = 24 / ( displayDivisor / 3 );
-			//Build the display string
-			sprintf(tempString, "%4d", (unsigned int)displayDivisor);
-			tempString[0] = '1';
-			tempString[1] = ' ';
-		}
+	//-- Select the correct 7 segment sources here --//
 
-		
-		if( quantizingTrackFlag == 1 )
-		{
-			quantizingTrackTimeKeeper.mClear();
-			rightDisplay.setState( SSON );
-			rightDisplay.setData( tempString );
-			quantizeTrackTicks = tickDivisor;
-			Serial.print("quantizeTrackTicks = ");
-			Serial.println(quantizeTrackTicks);
-		}
-		else
-		{
-			rightDisplay.peekThrough( tempString, 1000 ); // 'data' type, time in ms to persist
-			quantizeTicks = tickDivisor;
-			Serial.print("quantizeTicks = ");
-			Serial.println(quantizeTicks);
-		}
+	//Default modes
+	leftDisplayMode = 0;
+	rightDisplayMode = 0;
+
+	if( ( recordingFlag.getFlag() )||( playingFlag.getFlag() ) )
+	{
+		leftDisplayMode = 2;
+	}
+	else
+	{
+		leftDisplayMode = 1;
+	}
+	if(viewingTrack == ( recordingTrack + 1 ) )
+	{
+		rightDisplayMode = 0;
+	}
+	else
+	{
+		rightDisplayMode = 1;
 	}
 	
+	if( quantizingTrackFlag.getFlag() == 1 )
+	{
+		rightDisplayMode = 2;
+		
+	}
+	else
+	{
+		option2Led.setState( LEDOFF );
+		quantizingTrackFlag.clearFlag();
+	}
+	//Make displays
+	leftDisplay.setState( SSON );
+	switch( leftDisplayMode )
+	{
+		case 0:  //Channel is song number
+			leftDisplay.setData("8008");
+		break;
+		case 1:  //Channel is BPM
+			sprintf(tempString, "%4d", (unsigned int)BPM);
+			leftDisplay.setData(tempString);
+		break;
+		case 2:  //Channel is playhead
+			leftDisplay.setData(tapHeadMessage);
+		break;
+		default:
+			leftDisplay.setState( SSOFF );
+		break;
+	}
+	
+
+	switch( rightDisplayMode )
+	{
+		case 0:  //display next track to record
+			rightDisplay.setState( SSON );
+			sprintf(tempString, "%4d", (unsigned int)viewingTrack);
+			rightDisplay.setData(tempString);
+		break;
+		case 1:  //select other track
+			rightDisplay.setState( SSFLASHING );
+			sprintf(tempString, "%4d", (unsigned int)viewingTrack);
+			rightDisplay.setData(tempString);
+		break;
+		case 2:  //display selecting track quantize
+			rightDisplay.setState( SSON );
+			rightDisplay.setData(quantizeMessage);
+		default:
+		break;
+	}
+
 	update();
 }
 
 void LooperPanel::tickStateMachine()
 {
 	//***** PROCESS THE LOGIC *****//
-	
+	uint8_t incrementTrackTemp = 0;
     //Now do the states.
     PStates nextState = state;
     switch( state )
@@ -301,77 +355,47 @@ void LooperPanel::tickStateMachine()
     case PInit:
 		Serial.println("Init state!!!!");
 		nextState = PIdle;
-		leftDisplay.setState(SSON);
-		sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-		rightDisplay.setData(tempString);
-		rightDisplay.setState(SSON);
 		
 		break;
 	case PIdle:
-		sprintf(tempString, "%4d", (unsigned int)( BPM ));
-		leftDisplay.setData(tempString);
 		//Can't be running, if button pressed move on
 		if( playButton.serviceRisingEdge() )
 		{
-			if( songHasData == 0 )
+			resetTapHeadFlag.setFlag();
+			Serial.print("SHDF: ");
+			Serial.println( songHasDataFlag.getFlag() );
+			if( songHasDataFlag.getFlag() == 0 )
 			{
 				recordLed.setState(LEDON);
 				playLed.setState(LEDOFF);
 				overdubLed.setState(LEDOFF);
-				resetTapHeadFlag = 1;
-				screenControlTap = 1;
-				recording = 1;
+				recordingFlag.setFlag();
 				nextState = PFirstRecord;
 			}
 			else
 			{
-				resetTapHeadFlag = 1;
 				recordLed.setState(LEDOFF);
 				playLed.setState(LEDON);
 				overdubLed.setState(LEDOFF);
-				playing = 1;
-				recording = 0;
+				playingFlag.setFlag();
+				recordingFlag.clearFlag();
 				nextState = PPlay;
-				
-				if( quantizingTrackFlag != 1 )
-				{
-					rightDisplay.setState( SSON );
-					viewingTrack = recordingTrack + 1;
-					sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-					rightDisplay.setData(tempString);
-				}
 			}
-		}
-		if( quantizingTrackFlag != 1 )
-		{
-			sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-			rightDisplay.setData(tempString);
-			rightDisplay.setState(SSON);
 		}
         break;
 	case PFirstRecord:
 	    //Came from PIdle
-		if( playButton.serviceRisingEdge() )
+		if( ( playButton.serviceRisingEdge() ) )
 		{
 			recordLed.setState(LEDOFF);
 			playLed.setState(LEDON);
 			overdubLed.setState(LEDOFF);
-			markLengthFlag = 1; //hold the length
-			playing = 1;
-			recording = 0;
+			markLengthFlag.setFlag(); //hold the length
+			playingFlag.setFlag();
+			recordingFlag.clearFlag();
 			nextState = PPlay;
-			songHasData = 1;
-			allowOverRide = 1;
-			
-			recordingTrack++;
-			
-			if( quantizingTrackFlag != 1 )
-			{
-				rightDisplay.setState( SSON );
-				viewingTrack = recordingTrack + 1;
-				sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-				rightDisplay.setData(tempString);
-			}
+			songHasDataFlag.setFlag();
+			incrementTrackTemp = 1;
 
 		}
         break;
@@ -382,14 +406,14 @@ void LooperPanel::tickStateMachine()
 			playLed.setState(LEDOFF);
 			overdubLed.setState(LEDON);
 			nextState = POverdub;
-			recording = 1;
-			if( quantizingTrackFlag != 1 )
-			{
-				sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-				rightDisplay.setData(tempString);
-				rightDisplay.setState(SSON);
-			}
+			recordingFlag.setFlag();
 			
+		}
+		if( playButton.serviceHoldRisingEdge() )
+		{
+			nextState = PUndoDecrement;
+			
+
 		}
 		break;
 	case POverdub:
@@ -399,19 +423,53 @@ void LooperPanel::tickStateMachine()
 			playLed.setState(LEDON);
 			overdubLed.setState(LEDOFF);
 			nextState = PPlay;
-			recording = 0;
-			
-			recordingTrack++;
-			
-			if( quantizingTrackFlag != 1 )
-			{
-				rightDisplay.setState( SSON );
-				viewingTrack = recordingTrack + 1;
-				sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-				rightDisplay.setData(tempString);
-			}
-			allowOverRide = 1;
+			recordingFlag.clearFlag();
 
+			incrementTrackTemp = 1;
+			
+		}
+		if( playButton.serviceHoldRisingEdge() )
+		{
+			nextState = PUndoClearOverdub;
+			
+			recordingFlag.clearFlag();
+			recordLed.setState(LEDOFF);
+			playLed.setState(LEDON);
+			overdubLed.setState(LEDOFF);
+		}
+		break;
+	case PUndoClearOverdub:
+		if( clearTrackFlag.serviceFallingEdge() )
+		{
+			nextState = PUndoDecrement;
+		}
+		else
+		{
+			trackToClear = recordingTrack;
+			clearTrackFlag.setFlag();
+		}
+		break;
+	case PUndoDecrement:
+		//Decrement count
+		if( recordingTrack > 0 )
+		{
+			if( viewingTrack == recordingTrack + 1 )
+			{
+				viewingTrack = recordingTrack;
+			}
+			recordingTrack--;
+		}
+		nextState = PUndoClearTrack;
+		break;
+	case PUndoClearTrack:
+		if( clearTrackFlag.serviceFallingEdge() )
+		{
+			nextState = PPlay;
+		}
+		else
+		{
+			trackToClear = recordingTrack;
+			clearTrackFlag.setFlag();
 		}
 		break;
     default:
@@ -426,74 +484,34 @@ void LooperPanel::tickStateMachine()
 		playLed.setState(LEDOFF);
 		overdubLed.setState(LEDOFF);
 		nextState = PIdle;
-		recording = 0;
-		playing = 0;
-		allowOverRide = 0;
-		
+		recordingFlag.clearFlag();
+		playingFlag.clearFlag();
 	}
 	else if( stopButton.serviceHoldRisingEdge() )
 	{
 		recordLed.setState(LEDFLASHINGFAST);
 		trackNum = 1;
 		recordingTrack = 0;
-		songClearRequestFlag = 1;
+		clearSongFlag.setFlag();
 		viewingTrack = 1;
-		sprintf(tempString, "%4d", (unsigned int)viewingTrack);
-		rightDisplay.setData(tempString);
-		songHasData = 0;
-		allowOverRide = 0;
+		songHasDataFlag.clearFlag();
+		nextState = PIdle;
 	}
 
+	if( incrementTrackTemp == 1 )
+	{
+		if( recordingTrack < 15 )
+		{
+			if( viewingTrack == recordingTrack + 1 )
+			{
+				viewingTrack = recordingTrack + 2;
+			}
+			recordingTrack++;
+		}
+	}
+	
     state = nextState;
 
-}
-
-uint8_t LooperPanel::serviceResetTapHead( void )
-{
-	uint8_t returnVar = 0;
-	if( resetTapHeadFlag == 1 )
-	{
-		resetTapHeadFlag = 0;
-		returnVar = 1;
-	}
-	
-	return returnVar;
-}
-
-uint8_t LooperPanel::serviceMarkLength( void )
-{
-	uint8_t returnVar = 0;
-	if( markLengthFlag == 1 )
-	{
-		markLengthFlag = 0;
-		returnVar = 1;
-	}
-	
-	return returnVar;
-}
-
-uint8_t LooperPanel::serviceSongClearRequest( void )
-{
-	uint8_t returnVar = 0;
-	if( songClearRequestFlag == 1 )
-	{
-		songClearRequestFlag = 0;
-		returnVar = 1;
-	}
-	
-	return returnVar;
-}
-
-uint8_t LooperPanel::serviceBPMUpdateRequest( void )
-{
-	uint8_t returnVar = 0;
-	if( BPMUpdateRequestFlag == 1 )
-	{
-		BPMUpdateRequestFlag = 0;
-		returnVar = 1;
-	}
-	
-	return returnVar;
 }
 
 void LooperPanel::setTapHeadMessage( BeatCode & inputHead )

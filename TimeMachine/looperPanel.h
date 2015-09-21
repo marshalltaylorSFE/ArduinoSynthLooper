@@ -8,7 +8,7 @@
 #include "PanelComponents.h"
 #include "TimeCode.h"
 #include "Panel.h"
-
+#include "flagMessaging.h"
 
 enum PStates
 {
@@ -17,6 +17,9 @@ enum PStates
 	PFirstRecord,
 	PPlay,
 	POverdub,
+	PUndoClearOverdub,
+	PUndoDecrement,
+	PUndoClearTrack
 
 };
 
@@ -36,46 +39,55 @@ public:
 	//State machine stuff  
 	void processMachine( void );
 	void tickStateMachine( void );
-	uint8_t serviceResetTapHead( void );
-	uint8_t serviceMarkLength( void );
-	uint8_t serviceSongClearRequest( void );
-	uint8_t serviceBPMUpdateRequest( void );
 	void setTapHeadMessage( BeatCode & );
 	void getTrackMute( uint8_t* );
 	uint8_t getRecordingTrack( void );
-	uint8_t recording;
-	uint8_t playing;
-	uint16_t BPM;
 
 	void timersMIncrement( uint8_t );
 
-	uint8_t quantizeTrackTicks;
-	uint8_t quantizeTicks;
 	
-	uint8_t songHasData;
-	uint8_t allowOverRide;
-private:
-	//State machine stuff  
-	PStates state;
+	//Flags coming in from the system
 
-	//Controls
-	uint8_t resetTapHeadFlag;
-	uint8_t markLengthFlag;
-	uint8_t screenControlTap;
-	//uint8_t trackNum;
-	uint8_t viewingTrack;
-	uint8_t recordingTrack;
-	uint8_t songClearRequestFlag;
-	uint8_t BPMUpdateRequestFlag;
-	uint8_t trackMute[16];
-	char tapHeadMessage[5];
-	
 	uint8_t tapLedFlag;
 	uint8_t syncLedFlag;
 	uint8_t rxLedFlag;
 	uint8_t txLedFlag;
 	
-	uint8_t quantizingTrackFlag;
+	//Internal - and going out to the system - Flags
+	MessagingFlag clearSongFlag;
+	MessagingFlag updateBPMFlag;
+	MessagingFlag recordingFlag;
+	MessagingFlag playingFlag;
+	MessagingFlag songHasDataFlag;
+	MessagingFlag resetTapHeadFlag;
+	MessagingFlag markLengthFlag;
+	MessagingFlag clearTrackFlag;
+	
+	//  ..and data.
+	uint8_t trackMute[16];
+	uint16_t BPM;
+	uint8_t quantizeTrackTicks;
+	uint8_t quantizeTicks;
+	uint8_t leftDisplayMode;
+	uint8_t rightDisplayMode;
+	uint8_t trackToClear;
+	
+
+private:
+	//Internal Flags
+	MessagingFlag quantizingTrackFlag;
+	MessagingFlag quantizeHoldOffFlag;
+	//  ..and data
+	char tapHeadMessage[5];
+	char quantizeMessage[10];
+	uint8_t viewingTrack;
+	uint8_t recordingTrack;
+	
+
+	//State machine stuff  
+	PStates state;
+
+
 	TimeKeeper quantizingTrackTimeKeeper;
 };
 
