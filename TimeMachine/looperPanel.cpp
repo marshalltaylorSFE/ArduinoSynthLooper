@@ -173,6 +173,21 @@ void LooperPanel::processMachine( void )
 		BPM--;
 		updateBPMFlag.setFlag();
 	}
+	if( tapButton.serviceRisingEdge() )
+	{
+		if( recordingTapTimeKeeper.mGet() < ( 3000 ) )
+		{
+			BPM = 60000 / recordingTapTimeKeeper.mGet();
+			updateBPMFlag.setFlag();
+			recordingTapTimeKeeper.mClear();
+		}
+		else
+		{
+			recordingTapTimeKeeper.mClear();
+		}
+
+	}
+	
 
 	if( quantizeSelector.serviceChanged() )
 	{
@@ -562,4 +577,5 @@ void LooperPanel::timersMIncrement( uint8_t inputValue )
 	rightDisplay.peekThroughTimeKeeper.mIncrement(inputValue);
 
 	quantizingTrackTimeKeeper.mIncrement(inputValue);
+	recordingTapTimeKeeper.mIncrement(inputValue);
 }

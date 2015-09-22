@@ -17,8 +17,8 @@ public:
 	void clearTrack( uint8_t );
 	void setPlayEnabled( uint8_t * );
 	
-private:
 	MicroLL track[16];
+private:
 	MidiEvent * playBackNote[16];
 	uint8_t recordingTrack;
 	uint8_t playEnable[16];

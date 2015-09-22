@@ -89,6 +89,7 @@ private:
 
 
 	TimeKeeper quantizingTrackTimeKeeper;
+	TimeKeeper recordingTapTimeKeeper;
 };
 
 #endif

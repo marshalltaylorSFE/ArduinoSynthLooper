@@ -35,6 +35,7 @@ IntervalTimer myTimer;
 //    cannot exceed variable size.
 
 TimerClass32 midiPlayTimer( 1000 );
+TimerClass32 midiRecordTimer( 1000 );
 TimerClass32 panelUpdateTimer(10000);
 uint8_t debugLedStates = 1;
 
@@ -46,6 +47,8 @@ uint8_t ledToggleFastState = 0;
 //TimerClass32 processSMTimer( 50000 );
 
 TimerClass32 debounceTimer(5000);
+
+TimerClass32 debugTimer(2000000);
 
 //tick variable for interrupt driven timer1
 uint32_t usTicks = 0;
@@ -69,24 +72,28 @@ MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiA);
 #include "midiDB.h"
 MidiSong currentSong;
 
-uint8_t fixedFirstNote = 0;
+MicroLL rxNoteList;
+MicroLL noteOnInList;
+MicroLL noteOnOutList;
 
 uint8_t rxLedFlag = 0;
 
 void handleNoteOn(byte channel, byte pitch, byte velocity)
 {
 	rxLedFlag = 1;
-	if( myLooperPanel.recordingFlag.getFlag() )
+	MidiEvent tempEvent;
+	tempEvent.timeStamp = tapHead.getQuantizedPulses( myLooperPanel.quantizeTicks );
+	if(tempEvent.timeStamp >= loopLength )
 	{
-		MidiEvent tempEvent;
-		tempEvent.timeStamp = tapHead.getQuantizedPulses( myLooperPanel.quantizeTicks );
-		tempEvent.eventType = 0x90;
-		tempEvent.channel = channel;
-		tempEvent.value = pitch;
-		tempEvent.data = velocity;
-		
-		currentSong.recordNote( tempEvent );
+		tempEvent.timeStamp = tempEvent.timeStamp - loopLength;
 	}
+	tempEvent.eventType = 0x90;
+	tempEvent.channel = channel;
+	tempEvent.value = pitch;
+	tempEvent.data = velocity;
+		
+	rxNoteList.pushObject( tempEvent );
+	
 	midiA.sendNoteOn(pitch, velocity, channel);
 }
 
@@ -94,34 +101,29 @@ void handleNoteOff(byte channel, byte pitch, byte velocity)
 {
 	rxLedFlag = 1;
 	
-	if(( myLooperPanel.songHasDataFlag.getFlag() ) && (fixedFirstNote == 0))
+	MidiEvent tempEvent;
+	tempEvent.timeStamp = tapHead.getQuantizedPulses( myLooperPanel.quantizeTicks );
+	Serial.print("*****loopLength at ");
+	Serial.println(loopLength);	
+	if(tempEvent.timeStamp >= loopLength )
 	{
-		//wedge in a note on
-		MidiEvent tempEvent;
-		tempEvent.timeStamp = 0;
-		tempEvent.eventType = 0x90;
-		tempEvent.channel = channel;
-		tempEvent.value = pitch;
-		tempEvent.data = velocity;
-		
-		currentSong.recordNote( tempEvent );
-		fixedFirstNote = 1;
+		tempEvent.timeStamp = tempEvent.timeStamp - loopLength;
 	}
-	if(( myLooperPanel.recordingFlag.getFlag() ))
+	if(loopLength == 0xFFFFFFFF)
 	{
-		MidiEvent tempEvent;
-		tempEvent.timeStamp = tapHead.getQuantizedPulses( myLooperPanel.quantizeTicks );
-		if(tempEvent.timeStamp >= loopLength )
+		if( tempEvent.timeStamp != 0 ) //Shorten all first loop notes
 		{
-			tempEvent.timeStamp = tempEvent.timeStamp - loopLength;
+			tempEvent.timeStamp--;
 		}
-		tempEvent.eventType = 0x80;
-		tempEvent.channel = channel;
-		tempEvent.value = pitch;
-		tempEvent.data = 0;
-		
-		currentSong.recordNote( tempEvent );
 	}
+	tempEvent.eventType = 0x80;
+	tempEvent.channel = channel;
+	tempEvent.value = pitch;
+	tempEvent.data = 0;
+	Serial.print("*****NoteOFF at ");
+	Serial.println(tempEvent.timeStamp);
+	rxNoteList.pushObject( tempEvent );
+	
 	midiA.sendNoteOff(pitch, velocity, channel);
 	
 }
@@ -166,11 +168,13 @@ void loop()
 //**Copy to make a new timer******************//  
 //   msTimerA.update(usTicks);
 	midiPlayTimer.update(usTicks);
+	midiRecordTimer.update(usTicks);
 	ledToggleTimer.update(usTicks);
 	ledToggleFastTimer.update(usTicks);
 	panelUpdateTimer.update(usTicks);
 	debounceTimer.update(usTicks);
     tapTempoPulseTimer.update(usTicks);
+	debugTimer.update(usTicks);
 	
 	//**Copy to make a new timer******************//  
 	//  if(msTimerA.flagStatus() == PENDING)
@@ -213,13 +217,14 @@ void loop()
 		{
 			myLooperPanel.markLengthFlag.clearFlag();
 			loopLength = tapHead.getQuantizedPulses( myLooperPanel.quantizeTrackTicks );
+			Serial.print("************************");
+			Serial.println(loopLength);
 		}
 		if( myLooperPanel.clearSongFlag.serviceRisingEdge() )
 		{
 			myLooperPanel.clearSongFlag.clearFlag();
 			currentSong.clear();
 			loopLength = 0xFFFFFFFF;
-			fixedFirstNote = 0;
 		}
 		if( myLooperPanel.clearTrackFlag.serviceRisingEdge() )
 		{
@@ -260,6 +265,92 @@ void loop()
 
 	
 	}
+	if(midiRecordTimer.flagStatus() == PENDING)
+	{
+		//
+		listIdemNumber_t unservicedNoteCount = rxNoteList.listLength();
+		//Get a note for this round
+		MidiEvent tempNote;
+		if( unservicedNoteCount > 0 )
+		{
+			tempNote = *rxNoteList.readObject( unservicedNoteCount - 1 );
+			if( tempNote.eventType == 0x90 )//We got a new note-on
+			{
+				//Search for the note on.  If found, do nothing, else write
+				if( noteOnInList.seekObjectbyNoteValue( tempNote ) == -1 )
+				{
+					//note not found.  record
+					noteOnInList.pushObject( tempNote );
+					if( myLooperPanel.recordingFlag.getFlag() )
+					{
+						currentSong.recordNote( tempNote );
+					}
+					rxNoteList.dropObject( unservicedNoteCount - 1 );
+				}
+				else
+				{
+					//Was found
+					//do nothing
+				}
+			}
+			else if( tempNote.eventType == 0x80 )
+			{
+				//Congratulations! It's a note off!
+				//Search for the note on.  If found, do nothing, else write
+				int8_t tempSeekDepth = noteOnInList.seekObjectbyNoteValue( tempNote );
+				if( tempSeekDepth == -1 )
+				{
+					//not found.
+					//Do nothing
+					
+				}
+				else
+				{
+					//Was found.  Time for note off actions
+					Serial.print("Dropping ");
+					Serial.println( tempSeekDepth );
+					noteOnInList.dropObject( tempSeekDepth );
+					if( myLooperPanel.recordingFlag.getFlag() )
+					{
+						Serial.print("tempnote ");
+						Serial.println(tempNote.timeStamp);
+						currentSong.recordNote( tempNote );
+					}
+					rxNoteList.dropObject( unservicedNoteCount - 1 );
+				}				
+			}
+			else
+			{
+				//Destroy the crappy data!
+				rxNoteList.dropObject( unservicedNoteCount );
+			}
+		}
+		//else we no new data!
+		else
+		{
+			//If this is the first of a record, save all note-ons 
+			if( myLooperPanel.recordingFlag.serviceRisingEdge() )
+			{
+				MidiEvent * tempNotePtr;
+				//Look for note ons
+				if( noteOnInList.listLength() )
+				{
+					for( int i = noteOnInList.listLength(); i > 0; i-- )
+					{
+						//Record all the note-ons
+						tempNotePtr = noteOnInList.readObject( i - 1 );
+						if( myLooperPanel.songHasDataFlag.getFlag() == 0 )
+						{
+							//If song has no data, change the time to zero
+							tempNotePtr->timeStamp = 0;
+						}
+						currentSong.recordNote( *tempNotePtr );
+					}
+				}
+				
+			}
+		}
+	}
 	
 	if(midiPlayTimer.flagStatus() == PENDING)
 	{
@@ -274,19 +365,62 @@ void loop()
 			//If it is time to play the returned note,
 			if( currentSong.getNextNote( noteToPlay, tapHead.getTotalPulses() ) == 1 )
 			{
+				int8_t tempSeekDepth2;
 				switch( noteToPlay.eventType )
 				{
 				case 0x90: //Note on
-					midiA.sendNoteOn( noteToPlay.value, noteToPlay.data, noteToPlay.channel );
+				//Search for the note on.  If found, do nothing, else write
+					if( noteOnOutList.seekObjectbyNoteValue( noteToPlay ) == -1 )
+					{
+						//note not found.
+						noteOnOutList.pushObject( noteToPlay );
+						midiA.sendNoteOn( noteToPlay.value, noteToPlay.data, noteToPlay.channel );
+					}
+					else
+					{
+						//Was found
+						//Do nothing
+					}
 					//Serial.println("Note On");
 					break;
 				case 0x80: //Note off
-					midiA.sendNoteOff( noteToPlay.value, noteToPlay.data, noteToPlay.channel );
+					//Search for the note on.  If found, do nothing, else write
+					tempSeekDepth2 = noteOnOutList.seekObjectbyNoteValue( noteToPlay );
+					if( tempSeekDepth2 == -1 )
+					{
+						//not found.
+						//Do nothing
+						
+					}
+					else
+					{
+						//Was found.  Time for note off actions
+						noteOnOutList.dropObject( tempSeekDepth2 );
+						midiA.sendNoteOff( noteToPlay.value, noteToPlay.data, noteToPlay.channel );
+					}
 					//Serial.println("Note Off");
 					break;
 				default:
 					break;
-				}				
+				}			
+			}
+			
+		}
+		else if( myLooperPanel.playingFlag.serviceFallingEdge() )
+		{
+			//Turn off all other notes
+			MidiEvent * tempNotePtr;
+			//Look for note ons
+			if( noteOnOutList.listLength() )
+			{
+				for( int i = noteOnOutList.listLength(); i > 0; i-- )
+				{
+					//Play all the note-offs
+					tempNotePtr = noteOnOutList.readObject( i - 1 );
+					midiA.sendNoteOff( tempNotePtr->value, 0, tempNotePtr->channel );
+					//Destroy the event
+					noteOnOutList.dropObject( i - 1 );
+				}
 			}
 			
 		}
@@ -305,7 +439,19 @@ void loop()
 		myLooperPanel.toggleFlasherState();
 		
 	}
+	//**Debug timer*******************************//  
+	if(debugTimer.flagStatus() == PENDING)
+	{
+		Serial.print("\n\nrxNoteList\n");
+		rxNoteList.printfMicroLL();
+		Serial.print("\n\nnoteOnInList\n");
+		noteOnInList.printfMicroLL();
+		Serial.print("\n\nnoteOnOutList\n");
+		noteOnOutList.printfMicroLL();
+		Serial.print("\n\ncurrentSong\n");
+		currentSong.track[0].printfMicroLL();
 	
+	}
 	midiA.read();
 
 	
