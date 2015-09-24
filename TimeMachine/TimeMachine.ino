@@ -74,7 +74,7 @@ MidiSong currentSong;
 
 MicroLL rxNoteList;
 MicroLL noteOnInList;
-MicroLL noteOnOutList;
+MicroLL noteOnOutList[16];
 
 uint8_t rxLedFlag = 0;
 
@@ -360,20 +360,20 @@ void loop()
 			uint8_t tempEnabledArray[16];
 			myLooperPanel.getTrackMute( tempEnabledArray );
 			currentSong.setPlayEnabled( tempEnabledArray );
-			
 			MidiEvent noteToPlay;
 			//If it is time to play the returned note,
 			if( currentSong.getNextNote( noteToPlay, tapHead.getTotalPulses() ) == 1 )
 			{
+				uint8_t channelMatrixRev = noteToPlay.channel - 1;
 				int8_t tempSeekDepth2;
 				switch( noteToPlay.eventType )
 				{
 				case 0x90: //Note on
 				//Search for the note on.  If found, do nothing, else write
-					if( noteOnOutList.seekObjectbyNoteValue( noteToPlay ) == -1 )
+					if( noteOnOutList[channelMatrixRev].seekObjectbyNoteValue( noteToPlay ) == -1 )
 					{
 						//note not found.
-						noteOnOutList.pushObject( noteToPlay );
+						noteOnOutList[channelMatrixRev].pushObject( noteToPlay );
 						midiA.sendNoteOn( noteToPlay.value, noteToPlay.data, noteToPlay.channel );
 					}
 					else
@@ -385,7 +385,7 @@ void loop()
 					break;
 				case 0x80: //Note off
 					//Search for the note on.  If found, do nothing, else write
-					tempSeekDepth2 = noteOnOutList.seekObjectbyNoteValue( noteToPlay );
+					tempSeekDepth2 = noteOnOutList[channelMatrixRev].seekObjectbyNoteValue( noteToPlay );
 					if( tempSeekDepth2 == -1 )
 					{
 						//not found.
@@ -395,7 +395,7 @@ void loop()
 					else
 					{
 						//Was found.  Time for note off actions
-						noteOnOutList.dropObject( tempSeekDepth2 );
+						noteOnOutList[channelMatrixRev].dropObject( tempSeekDepth2 );
 						midiA.sendNoteOff( noteToPlay.value, noteToPlay.data, noteToPlay.channel );
 					}
 					//Serial.println("Note Off");
@@ -411,15 +411,18 @@ void loop()
 			//Turn off all other notes
 			MidiEvent * tempNotePtr;
 			//Look for note ons
-			if( noteOnOutList.listLength() )
+			for( int channeli = 1; channeli < 17; channeli++ )
 			{
-				for( int i = noteOnOutList.listLength(); i > 0; i-- )
+				if( noteOnOutList[channeli].listLength() )
 				{
-					//Play all the note-offs
-					tempNotePtr = noteOnOutList.readObject( i - 1 );
-					midiA.sendNoteOff( tempNotePtr->value, 0, tempNotePtr->channel );
-					//Destroy the event
-					noteOnOutList.dropObject( i - 1 );
+					for( int i = noteOnOutList[channeli].listLength(); i > 0; i-- )
+					{
+						//Play all the note-offs
+						tempNotePtr = noteOnOutList[channeli].readObject( i - 1 );
+						midiA.sendNoteOff( tempNotePtr->value, 0, tempNotePtr->channel );
+						//Destroy the event
+						noteOnOutList[channeli].dropObject( i - 1 );
+					}
 				}
 			}
 			
@@ -446,8 +449,13 @@ void loop()
 		rxNoteList.printfMicroLL();
 		Serial.print("\n\nnoteOnInList\n");
 		noteOnInList.printfMicroLL();
-		Serial.print("\n\nnoteOnOutList\n");
-		noteOnOutList.printfMicroLL();
+		Serial.print("\n\nnoteOnOutLists\n");
+		for( int i = 0; i < 16; i++ )
+		{
+			Serial.print("i = ");
+			Serial.print( i + 1 );
+			noteOnOutList[i].printfMicroLL();
+		}
 		Serial.print("\n\ncurrentSong\n");
 		currentSong.track[0].printfMicroLL();
 	
