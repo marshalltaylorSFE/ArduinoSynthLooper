@@ -161,7 +161,11 @@ void LooperPanel::processMachine( void )
 		option2Led.setState( LEDFLASHINGFAST );
 		quantizingTrackTimeKeeper.mClear();
 	}
-
+	if( option4Button.serviceRisingEdge() )
+	{
+		//Send panic!
+		sendPanicFlag.setFlag();
+	}
 	if( songUpButton.serviceRisingEdge() )
 	{
 		BPM++;

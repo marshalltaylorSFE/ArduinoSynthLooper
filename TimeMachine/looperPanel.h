@@ -62,6 +62,7 @@ public:
 	MessagingFlag resetTapHeadFlag;
 	MessagingFlag markLengthFlag;
 	MessagingFlag clearTrackFlag;
+	MessagingFlag sendPanicFlag;
 	
 	//  ..and data.
 	uint8_t trackMute[16];

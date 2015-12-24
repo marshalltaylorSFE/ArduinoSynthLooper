@@ -13,7 +13,7 @@
 
 //**Timers and stuff**************************//
 #include "timerModule32.h"
-#define MAXINTERVAL 2000000 //Max TimerClass interval
+
 #include "timeKeeper.h"
 //**Panels and stuff**************************//
 #include <Wire.h>
@@ -33,6 +33,9 @@ IntervalTimer myTimer;
 //  Set MAXINTERVAL to the max foreseen interval of any TimerClass
 //  Set MAXTIMER to overflow number in the header.  MAXTIMER + MAXINTERVAL
 //    cannot exceed variable size.
+//Globals
+uint32_t MAXTIMER = 60000000;
+uint32_t MAXINTERVAL = 2000000;
 
 TimerClass32 midiPlayTimer( 1000 );
 TimerClass32 midiRecordTimer( 1000 );
@@ -67,6 +70,7 @@ uint32_t loopLength = 0xFFFFFFFF;
 
 // MIDI things
 #include <MIDI.h>
+#include <midi_Defs.h>
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiA);
 
 #include "midiDB.h"
@@ -237,7 +241,15 @@ void loop()
 			//Update the BPM
 			tapTempoPulseTimer.setInterval( tapTempoTimerMath( myLooperPanel.BPM ) );
 		}
+		if( myLooperPanel.sendPanicFlag.serviceRisingEdge() )
+		{
+			//send panic
+			midiA.sendRealTime(MIDI_NAMESPACE::SystemReset);
+			myLooperPanel.sendPanicFlag.clearFlag();
+		}
+		
 		currentSong.setRecordingTrack( myLooperPanel.getRecordingTrack() );
+		
 	}
 	
 
