@@ -111,3 +111,27 @@ uint32_t BeatCode::getQuantizedPulses( uint8_t qTicks )
 	
 	return totalPulses + remainder;
 }
+
+uint32_t BeatCode::convertLengthInput( int32_t inputTicks, uint8_t qTicks )
+{
+	uint8_t limit = ( qTicks / 2 ); //say, qTicks = 24, 1/4 note. Limit = 12
+	int8_t remainder = inputTicks % qTicks; //Range 0-23
+	if( remainder < limit ) //Than we should subtract on 0-11 remainders
+	{
+		remainder = 0 - remainder;
+	}
+	else //or add on 12-23 remainders, add 1-12
+	{
+		remainder = qTicks - remainder;
+	}
+	Serial.println("\n\n");
+	Serial.println("Recording ticks");
+	Serial.println(qTicks);
+	Serial.println(remainder);
+	int32_t outputTicks = inputTicks + remainder;
+	if( outputTicks < qTicks )
+	{
+		outputTicks = qTicks;
+	}
+	return outputTicks;
+}

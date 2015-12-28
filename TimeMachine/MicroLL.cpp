@@ -10,7 +10,7 @@
 //  Created:  March 21, 2015
 //
 //**********************************************************************//
-#define MICROLL_DEBUG
+//#define MICROLL_DEBUG
 
 //Includes
 #include "MicroLL.h"
@@ -82,7 +82,6 @@ void MicroLL::pushObject( listObject_t & objectToPush )
 	newObject->timeStamp = objectToPush.timeStamp;
 	
     newObject->nextObject = &nullObject;
-    
   }
 
 }
@@ -236,8 +235,9 @@ void MicroLL::insertObjectByTime( listObject_t & objectToInsert )
 
 	//Put it in there
 	insertObject( objectToInsert, positionToBe );
-	
+#ifdef MICROLL_DEBUG	
 	printfMicroLL();
+#endif
 }
 
 // //returns listObject_t
@@ -407,5 +407,45 @@ void MicroLL::printfMicroLL( void )
   }
   Serial.print("\ncurrentPosition:");
   Serial.println(currentPosition);
+
+}
+
+
+//printfs the stack as can be loaded easily in a spreadsheet
+void MicroLL::printfNoteGraph( void )
+{
+
+  listObject_t * tempObject;
+  long output;
+  tempObject = startObjectPtr;
+  Serial.println("\ntimeStamp, note state, value");
+  //Iterate to the depth
+  for ( uint8_t i = 0; i < currentPosition; i++ )
+  {
+    Serial.print(tempObject->timeStamp);
+    Serial.print(",");
+	if( tempObject->eventType == 0x80 )
+	{
+		//Note on
+		Serial.print( tempObject->value + 24 );
+	}
+	else
+	{
+		//Note off
+		Serial.print( tempObject->value );
+	}
+	Serial.print(",");
+    Serial.print(tempObject->channel);
+    Serial.print(",");
+    Serial.print(tempObject->value);
+    Serial.print(",");
+    Serial.print(tempObject->data);
+    Serial.print(",");
+    Serial.println("");    
+    //move note
+    tempObject = tempObject->nextObject;
+  }
+  //Serial.print("\ncurrentPosition:");
+  //Serial.println(currentPosition);
 
 }

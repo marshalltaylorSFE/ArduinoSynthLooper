@@ -21,12 +21,15 @@ LooperPanel::LooperPanel( void )
 	syncLedFlag = 0;
 	txLedFlag = 0;
 	rxLedFlag = 0;	
-	BPM = 80;
+	BPM = 100;
 	
 	state = PInit;
 	
 	quantizeTrackTicks = 24;
-	quantizeTicks = 24;
+	quantizeNoteLengthTicks = 3;
+	quantizeTicks = 3;
+	
+	songHasDataFlag.clearFlag();
 	
 }
 
@@ -161,6 +164,12 @@ void LooperPanel::processMachine( void )
 		option2Led.setState( LEDFLASHINGFAST );
 		quantizingTrackTimeKeeper.mClear();
 	}
+	if( option3Button.serviceRisingEdge() )
+	{
+		quantizingNoteLengthFlag.setFlag();
+		option3Led.setState( LEDFLASHINGFAST );
+		quantizingNoteLengthTimeKeeper.mClear();
+	}
 	if( option4Button.serviceRisingEdge() )
 	{
 		//Send panic!
@@ -233,7 +242,12 @@ void LooperPanel::processMachine( void )
 		}
 		quantizeMessage[4] = '\0';		
 	    
-		if( quantizingTrackFlag.getFlag() )
+		if( quantizingNoteLengthFlag.getFlag() )
+		{
+			quantizingNoteLengthTimeKeeper.mClear();
+			quantizeNoteLengthTicks = tickDivisor;
+		}
+		else if( quantizingTrackFlag.getFlag() )
 		{
 			quantizingTrackTimeKeeper.mClear();
 			quantizeTrackTicks = tickDivisor;
@@ -258,7 +272,11 @@ void LooperPanel::processMachine( void )
 	{
 		quantizingTrackFlag.clearFlag();
 	}
-
+	
+	if(( quantizingNoteLengthTimeKeeper.mGet() > 2000 )&&( quantizingNoteLengthFlag.getFlag() == 1 ))
+	{
+		quantizingNoteLengthFlag.clearFlag();
+	}
 	//Do main machine
 	tickStateMachine();
 	
@@ -320,6 +338,16 @@ void LooperPanel::processMachine( void )
 	{
 		option2Led.setState( LEDOFF );
 		quantizingTrackFlag.clearFlag();
+	}
+	if( quantizingNoteLengthFlag.getFlag() == 1 )
+	{
+		rightDisplayMode = 2;
+		
+	}
+	else
+	{
+		option3Led.setState( LEDOFF );
+		quantizingNoteLengthFlag.clearFlag();
 	}
 	//Make displays
 	leftDisplay.setState( SSON );
@@ -581,5 +609,6 @@ void LooperPanel::timersMIncrement( uint8_t inputValue )
 	rightDisplay.peekThroughTimeKeeper.mIncrement(inputValue);
 
 	quantizingTrackTimeKeeper.mIncrement(inputValue);
+	quantizingNoteLengthTimeKeeper.mIncrement(inputValue);
 	recordingTapTimeKeeper.mIncrement(inputValue);
 }

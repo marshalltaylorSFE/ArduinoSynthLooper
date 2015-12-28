@@ -72,6 +72,7 @@ class MicroLL
 	
 	//Debug
 	void printfMicroLL( void );
+	void printfNoteGraph( void );
 	
 
 

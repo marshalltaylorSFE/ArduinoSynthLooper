@@ -61,6 +61,7 @@ public:
 	MessagingFlag songHasDataFlag;
 	MessagingFlag resetTapHeadFlag;
 	MessagingFlag markLengthFlag;
+	MessagingFlag lengthEstablishedFlag;
 	MessagingFlag clearTrackFlag;
 	MessagingFlag sendPanicFlag;
 	
@@ -68,6 +69,7 @@ public:
 	uint8_t trackMute[16];
 	uint16_t BPM;
 	uint8_t quantizeTrackTicks;
+	uint8_t quantizeNoteLengthTicks;
 	uint8_t quantizeTicks;
 	uint8_t leftDisplayMode;
 	uint8_t rightDisplayMode;
@@ -77,6 +79,7 @@ public:
 private:
 	//Internal Flags
 	MessagingFlag quantizingTrackFlag;
+	MessagingFlag quantizingNoteLengthFlag;
 	MessagingFlag quantizeHoldOffFlag;
 	//  ..and data
 	char tapHeadMessage[5];
@@ -90,6 +93,7 @@ private:
 
 
 	TimeKeeper quantizingTrackTimeKeeper;
+	TimeKeeper quantizingNoteLengthTimeKeeper;
 	TimeKeeper recordingTapTimeKeeper;
 };
 
