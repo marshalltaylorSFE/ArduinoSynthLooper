@@ -10,7 +10,7 @@
 //  Created:  March 21, 2015
 //
 //**********************************************************************//
-
+#include "Arduino.h"
 //**Timers and stuff**************************//
 #include "timerModule32.h"
 
@@ -34,8 +34,8 @@ IntervalTimer myTimer;
 //  Set MAXTIMER to overflow number in the header.  MAXTIMER + MAXINTERVAL
 //    cannot exceed variable size.
 //Globals
-uint32_t MAXTIMER = 60000000;
-uint32_t MAXINTERVAL = 2000000;
+uint32_t maxTimer = 60000000;
+uint32_t MaxInterval = 2000000;
 
 TimerClass32 midiOutputTimer( 1000 );
 TimerClass32 midiInputTimer( 1000 );
@@ -70,7 +70,7 @@ uint32_t loopLength = 0xFFFFFFFF;
 
 // MIDI things
 #include <MIDI.h>
-#include <midi_Defs.h>
+//#include <midi_Defs.h>
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiA);
 
 #include "midiDB.h"
@@ -102,7 +102,8 @@ void handleNoteOn(byte channel, byte pitch, byte velocity)
 		
 	rxNoteList.pushObject( tempEvent );
 	
-	midiA.sendNoteOn(pitch, velocity, channel);
+	// This send should be taken care of elsewhere
+	//midiA.sendNoteOn(pitch, velocity, channel);
 }
 
 void handleNoteOff(byte channel, byte pitch, byte velocity)
@@ -132,7 +133,8 @@ void handleNoteOff(byte channel, byte pitch, byte velocity)
 //	Serial.println(tempEvent.timeStamp);
 	rxNoteList.pushObject( tempEvent );
 	
-	midiA.sendNoteOff(pitch, velocity, channel);
+	// This send should be taken care of elsewhere
+	//midiA.sendNoteOff(pitch, velocity, channel);
 	
 }
 
@@ -721,9 +723,9 @@ void loop()
 void serviceUS(void)
 {
   uint32_t returnVar = 0;
-  if(usTicks >= ( MAXTIMER + MAXINTERVAL ))
+  if(usTicks >= ( maxTimer + MaxInterval ))
   {
-    returnVar = usTicks - MAXTIMER;
+    returnVar = usTicks - maxTimer;
 
   }
   else

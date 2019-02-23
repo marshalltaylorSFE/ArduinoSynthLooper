@@ -212,7 +212,7 @@ void LooperPanel::processMachine( void )
 		quantizeMessage[3] = ' ';
 		
 		//Calculate data
-		if( quantizeSelector.getState() < 4 )
+		if( quantizeSelector.getState() < 6 )
 		{
 			//We are in 1/4 domain
 			displayDivisor = 4;
